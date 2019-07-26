@@ -1,4 +1,4 @@
-- name: Configure webserver with nginx an dtls
+- name: Configure webserver with nginx and tls
   hosts: webservers
   become: True
   vars:
