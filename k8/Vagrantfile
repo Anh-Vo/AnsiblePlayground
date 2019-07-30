@@ -5,6 +5,23 @@
 # configures the configuration version (we support older styles for
 # backwards compatibility). Please don't change it unless you know what
 # you're doing.
+missing_plugins = %w'vagrant-triggers'.reject { |p| Vagrant.has_plugin?(p) }
+unless missing_plugins.empty?
+  system "vagrant plugin install #{missing_plugins.join(' ')}"
+  puts "Installed new Vagrant plugins. Please run command again"
+  exit 1
+end
+
+$user = `lpass show --username -G redhat.com` # Maybe insert your own username here
+$password = `lpass show --password -G redhat.com` # Maybe insert your own password here
+
+$script = %{
+if ! subscription-manager status; then
+  sudo subscription-manager register --username=#{$user.strip} --password=#{$password.strip} --auto-attach
+  sudo yum-config-manager --disable rhel-7-server-rt-beta-rpms
+fi
+}
+
 Vagrant.configure("2") do |config|
   # Use the same key for each machine
   config.ssh.insert_key = false
@@ -14,6 +31,15 @@ Vagrant.configure("2") do |config|
 
   # Every Vagrant development environment requires a box. You can search for
   # boxes at https://vagrantcloud.com/search.
+  config.vm.provision "shell", inline: $script
+  config.trigger.before :destroy do
+    begin
+      run_remote "sudo subscription-manager unregister"
+    rescue
+      puts "Something went wrong, please remove the machine manually from https://access.redhat.com/management/subscriptions"
+    end
+  end
+
   config.vm.define "vagrant1" do |vagrant1|
     vagrant1.vm.box = "generic/rhel7"
     vagrant1.vm.network "forwarded_port", guest: 80, host: 8080
